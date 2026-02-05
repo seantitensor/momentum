@@ -1,0 +1,13 @@
+[project]
+name = "sf-signal"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.3.2",
+    "polars>=1.32.3",
+    "sf-quant>=0.1.18",
+    "sf-backtester>=0.1.1",
+    "marimo>=0.19.7",
+]
