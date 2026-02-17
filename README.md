@@ -37,7 +37,7 @@ sf-signal/
    - Save signal to `data/signal.parquet`
 
    ```bash
-   python src/create_signal.py
+   uv run python src/create_signal.py
    ```
 
 ### 3. **Research Signal** (`research.py`)
@@ -56,7 +56,7 @@ sf-signal/
    - Saves results to `data/weights.parquet`
 
    ```bash
-   python app/run_backtest.py
+   uv run python app/run_backtest.py
    ```
 
 ### 5. **Analyze Performance** (`production.py`)
@@ -88,13 +88,13 @@ marimo edit app/signal_research.py
 
 # 2. Implement your signal
 # Edit src/create_signal.py with your logic
-python src/create_signal.py
+uv run python src/create_signal.py
 
 # 3. Research signal characteristics
 marimo edit app/research.py
 
 # 4. Run backtest
-python app/run_backtest.py
+uv run python app/run_backtest.py
 
 # 5. View performance
 marimo edit app/production.py

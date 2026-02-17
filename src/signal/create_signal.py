@@ -36,8 +36,6 @@ def load_data() -> pl.DataFrame:
     )
     
     # TODO: Filter data as needed (date range, symbols, quality checks)
-    
-    pass
 
 def create_signal(output_path: str = "data/signal.parquet"):
     """
