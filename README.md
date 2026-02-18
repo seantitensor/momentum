@@ -82,6 +82,14 @@ All data files are stored in the `data/` directory:
 
 ## Quick Start
 
+First, create the `data/` folder where outputs will be saved:
+
+```bash
+mkdir -p data
+```
+
+Then follow the workflow:
+
 ```bash
 # 1. Explore signal ideas
 marimo edit app/signal_research.py

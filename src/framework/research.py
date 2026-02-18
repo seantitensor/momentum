@@ -5,56 +5,67 @@ app = marimo.App()
 
 
 @app.cell
-def __():
+def _():
+    import marimo
     import polars as pl
     import numpy as np
     import plotly.graph_objects as go
     import plotly.express as px
-    from datetime import date
-    from sf_quant.data import load_crsp_monthly
     from sf_quant.schema import AlphaSchema
-    # Placeholder for ff_regressions
-    # from sf_quant.regressions import ff_regressions
-    return pl, np, go, px, date, load_crsp_monthly, AlphaSchema
+    import sf_quant.research as sfr
+    import polars_ols
+    import pandas
+    return AlphaSchema, go, marimo, np, pl, sfr
 
 
 @app.cell
-def __(marimo):
+def _(marimo):
     signal_file = marimo.ui.text(
         value="data/signal.parquet",
         label="Signal file path:"
     )
-    return signal_file,
+    return (signal_file,)
 
 
 @app.cell
-def __(pl, AlphaSchema, signal_file, marimo):
-    # Load signal with error handling
-    import os
-    try:
-        if not os.path.exists(signal_file.value):
-            marimo.toast(f"Signal file not found at {signal_file.value}", kind="error")
-            signal_df = None
-        else:
-            signal_df = AlphaSchema.read_parquet(signal_file.value)
-            marimo.toast(f"Loaded signal with {len(signal_df)} rows", kind="success")
-    except Exception as e:
-        marimo.toast(f"Error loading signal: {e}", kind="error")
-        signal_df = None
-
-    signal_df
-    return signal_df,
+def _(pl, signal_file):
+    signal_df = pl.read_parquet(signal_file.value).filter(
+        pl.col('alpha').is_not_null()
+    )
+    return (signal_df,)
 
 
 @app.cell
-def __(signal_df, marimo):
+def _(marimo, signal_df):
     if signal_df is None:
         marimo.stop(marimo.md("**⚠️ Please load a valid signal file first**"))
     return
 
 
 @app.cell
-def __(marimo):
+def _(marimo):
+    marimo.md("""
+    ## Signal Analysis
+
+    Examine signal statistics and characteristics before portfolio construction.
+    """)
+    return
+
+
+@app.cell
+def _(sfr, signal_df):
+    sfr.get_signal_stats(signal_df)
+    return
+
+
+@app.cell
+def _(sfr, signal_df):
+    sfr.get_signal_distribution(signal_df)
+    return
+
+
+@app.cell
+def _(marimo):
     n_quantiles = marimo.ui.slider(
         value=5,
         start=2,
@@ -62,110 +73,115 @@ def __(marimo):
         step=1,
         label="Number of quantiles:"
     )
-    return n_quantiles,
+    return (n_quantiles,)
 
 
 @app.cell
-def __(pl, signal_df, n_quantiles):
-    # Create quantile portfolios
-    quantile_df = signal_df.with_columns([
-        pl.col("alpha")
-        .qcut(n_quantiles.value, labels=[f"Q{i+1}" for i in range(n_quantiles.value)])
-        .alias("quantile")
-    ])
+def _(marimo):
+    marimo.md("""
+    ## Quantile Portfolio Construction
 
-    # Get quantile boundaries for reference
-    quantile_boundaries = signal_df.select([
-        pl.col("alpha").quantile(pl.col("alpha").count() / (n_quantiles.value)).alias("boundaries")
-    ])
+    Build long-short portfolios based on signal quantiles.
+    """)
+    return
 
-    marimo.toast(f"Created {n_quantiles.value} quantile portfolios", kind="success")
+
+@app.cell
+def _(n_quantiles, sfr, signal_df):
+    # Create quantile portfolios based on alpha signal
+    quantile_df = sfr.generate_quantile_ports(
+        signal_df,
+        num_bins=n_quantiles.value,
+        signal_col='alpha'
+    )
+
     quantile_df.head(10)
-    return quantile_df, quantile_boundaries
+    return (quantile_df,)
 
 
 @app.cell
-def __(marimo):
+def _(n_quantiles, pl, quantile_df):
+    # Convert quantile portfolios to long format for performance analysis
+    ports_long = (
+        quantile_df
+        .unpivot(
+            index="date",
+            variable_name="quantile",
+            value_name="return"
+        )
+    )
+
+    ports_long.head(10)
+    return (ports_long,)
+
+
+@app.cell
+def _(marimo):
     include_ff_regression = marimo.ui.checkbox(
-        value=False,
+        value=True,
         label="Include Fama-French regression analysis"
     )
-    return include_ff_regression,
+    return (include_ff_regression,)
 
 
 @app.cell
-def __(pl, quantile_df, load_crsp_monthly):
-    # Load returns data
-    min_date = quantile_df.select(pl.col("date").min()).item()
-    max_date = quantile_df.select(pl.col("date").max()).item()
+def _(marimo):
+    marimo.md("""
+    ## Portfolio Performance Analysis
 
-    returns_df = load_crsp_monthly(
-        start=min_date,
-        end=max_date,
-        columns=["date", "barrid", "ret"]
-    )
-
-    # Merge signal with returns
-    portfolio_returns = quantile_df.join(
-        returns_df,
-        on=["date", "barrid"],
-        how="inner"
-    )
-
-    marimo.toast(f"Loaded returns data with {len(portfolio_returns)} observations", kind="success")
-    portfolio_returns.head()
-    return portfolio_returns, min_date, max_date, returns_df
+    Calculate and visualize performance metrics across quantile portfolios.
+    """)
+    return
 
 
 @app.cell
-def __(pl, portfolio_returns):
+def _(pl, ports_long):
     # Calculate quantile portfolio returns (equal-weighted)
     quantile_perf = (
-        portfolio_returns
+        ports_long
         .group_by(["date", "quantile"])
-        .agg(pl.col("ret").mean().alias("portfolio_ret"))
+        .agg(pl.col("return").mean().alias("portfolio_return"))
         .sort(["date", "quantile"])
     )
 
-    marimo.toast(f"Calculated quantile portfolio returns", kind="success")
     quantile_perf.head(20)
-    return quantile_perf,
+    return (quantile_perf,)
 
 
 @app.cell
-def __(pl, quantile_perf):
+def _(pl, quantile_perf):
     # Calculate cumulative returns for each quantile
     cumul_returns = (
         quantile_perf
         .with_columns([
-            (1 + pl.col("portfolio_ret")).log().alias("log_ret")
+            (1 + pl.col("portfolio_return")).log().alias("log_return")
         ])
         .with_columns([
-            pl.col("log_ret").cum_sum().over("quantile").exp().alias("cum_ret")
+            pl.col("log_return").cum_sum().over("quantile").exp().alias("cum_return")
         ])
-        .select(["date", "quantile", "cum_ret"])
+        .select(["date", "quantile", "cum_return"])
     )
 
     cumul_returns
-    return cumul_returns,
+    return (cumul_returns,)
 
 
 @app.cell
-def __(go, cumul_returns, n_quantiles):
+def _(cumul_returns, go, n_quantiles, pl):
     # Plot cumulative returns
     fig = go.Figure()
 
     for i in range(n_quantiles.value):
-        quantile = f"Q{i+1}"
+        quantile = f"p_{i+1}"
         data = cumul_returns.filter(pl.col("quantile") == quantile)
         dates = data.select("date").to_numpy().flatten()
-        returns = data.select("cum_ret").to_numpy().flatten()
+        returns = data.select("cum_return").to_numpy().flatten()
 
         fig.add_trace(go.Scatter(
             x=dates,
             y=returns,
             mode='lines',
-            name=quantile,
+            name=f"Q{i+1}",
             hovertemplate='<b>%{fullData.name}</b><br>Date: %{x|%Y-%m-%d}<br>Cum Return: %{y:.2f}<extra></extra>'
         ))
 
@@ -179,57 +195,56 @@ def __(go, cumul_returns, n_quantiles):
     )
 
     fig.show()
-    return fig,
+    return
 
 
 @app.cell
-def __(pl, quantile_perf):
+def _(np, pl, quantile_perf):
     # Calculate performance metrics
     metrics = (
         quantile_perf
         .with_columns([
-            (1 + pl.col("portfolio_ret")).log().alias("log_ret")
+            (1 + pl.col("portfolio_return")).log().alias("log_return")
         ])
         .group_by("quantile")
         .agg([
-            pl.col("portfolio_ret").mean().alias("mean_ret"),
-            pl.col("portfolio_ret").std().alias("std_ret"),
-            pl.col("log_ret").sum().alias("cum_log_ret"),
-            pl.col("portfolio_ret").count().alias("n_obs"),
+            pl.col("portfolio_return").mean().alias("mean_return"),
+            pl.col("portfolio_return").std().alias("std_return"),
+            pl.col("log_return").sum().alias("cum_log_return"),
+            pl.col("portfolio_return").count().alias("n_obs"),
         ])
         .with_columns([
-            (pl.col("cum_log_ret").exp() - 1).alias("total_ret"),
-            (pl.col("mean_ret") / pl.col("std_ret")).alias("sharpe_ratio"),
-            (pl.col("mean_ret") * 12).alias("annual_ret"),  # Assuming monthly data
-            (pl.col("std_ret") * np.sqrt(12)).alias("annual_vol"),
+            (pl.col("cum_log_return").exp() - 1).alias("total_return"),
+            (pl.col("mean_return") / pl.col("std_return")).alias("sharpe_ratio"),
+            (pl.col("mean_return") * 252).alias("annual_return"),  # Assuming monthly data
+            (pl.col("std_return") * np.sqrt(12)).alias("annual_vol"),
         ])
         .select([
             "quantile",
-            "annual_ret",
+            "annual_return",
             "annual_vol",
             "sharpe_ratio",
-            "total_ret",
+            "total_return",
             "n_obs"
         ])
         .sort("quantile")
     )
 
-    marimo.toast(f"Calculated performance metrics", kind="success")
     metrics
-    return metrics,
+    return (metrics,)
 
 
 @app.cell
-def __(go, metrics):
+def _(go, metrics):
     # Plot Sharpe Ratios
     fig_sharpe = go.Figure()
 
-    quantiles = metrics.select("quantile").to_numpy().flatten()
-    sharpe = metrics.select("sharpe_ratio").to_numpy().flatten()
+    _quantiles = metrics.select("quantile").to_numpy().flatten()
+    _sharpe = metrics.select("sharpe_ratio").to_numpy().flatten()
 
     fig_sharpe.add_trace(go.Bar(
-        x=quantiles,
-        y=sharpe,
+        x=_quantiles,
+        y=_sharpe,
         marker_color='steelblue',
         hovertemplate='<b>%{x}</b><br>Sharpe Ratio: %{y:.3f}<extra></extra>'
     ))
@@ -243,24 +258,24 @@ def __(go, metrics):
     )
 
     fig_sharpe.show()
-    return fig_sharpe,
+    return
 
 
 @app.cell
-def __(go, metrics):
+def _(go, metrics):
     # Plot Annual Returns vs Volatility
-    quantiles = metrics.select("quantile").to_numpy().flatten()
-    ret = metrics.select("annual_ret").to_numpy().flatten()
-    vol = metrics.select("annual_vol").to_numpy().flatten()
+    _quantiles = metrics.select("quantile").to_numpy().flatten()
+    _ret = metrics.select("annual_return").to_numpy().flatten()
+    _vol = metrics.select("annual_vol").to_numpy().flatten()
 
     fig_ef = go.Figure()
 
     fig_ef.add_trace(go.Scatter(
-        x=vol,
-        y=ret,
+        x=_vol,
+        y=_ret,
         mode='markers+text',
         marker=dict(size=12, color='steelblue'),
-        text=quantiles,
+        text=_quantiles,
         textposition='top center',
         hovertemplate='<b>%{text}</b><br>Annual Vol: %{x:.2%}<br>Annual Return: %{y:.2%}<extra></extra>'
     ))
@@ -274,52 +289,36 @@ def __(go, metrics):
     )
 
     fig_ef.show()
-    return fig_ef,
+    return
 
 
 @app.cell
-def __(marimo, include_ff_regression):
+def _(marimo):
     marimo.md("""
     ## Fama-French Regression Analysis
 
-    The following is a placeholder for Fama-French factor regression analysis.
+    Analyze quantile portfolio factor exposures and risk-adjusted returns.
     """)
-
     return
 
-
 @app.cell
-def __(marimo, include_ff_regression):
+def _(include_ff_regression, marimo, sfr, quantile_df):
     if include_ff_regression.value:
-        marimo.md("""
+        ff_results = sfr.run_ff_regression(quantile_df)
+        marimo.md(f"""
         ### Factor Loadings
 
-        ⚠️ **Placeholder**: `ff_regressions` from `sf_quant.regressions` would be used here to compute:
-        - Market factor loadings
-        - Size (SMB) factor loadings
-        - Value (HML) factor loadings
-        - Momentum (MOM) factor loadings
-        - Risk-free rate adjustments
+        **FF5 Factor Regression Results**
 
-        Example usage:
-        ```python
-        from sf_quant.regressions import ff_regressions
-
-        results = ff_regressions(
-            quantile_portfolio_returns,
-            factors_data,
-            factor_columns=['MKT', 'SMB', 'HML', 'MOM']
-        )
-        ```
+        {ff_results.to_pandas().to_markdown(index=False)}
         """)
     else:
-        marimo.md("Click the checkbox above to see Fama-French regression details.")
-
+        marimo.md("☑️ Check the box above to run Fama-French 5-factor regression analysis.")
     return
 
 
 @app.cell
-def __(marimo, metrics):
+def _(marimo, metrics):
     marimo.md(f"""
     ## Summary Statistics
 

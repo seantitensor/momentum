@@ -45,22 +45,22 @@ def create_signal(output_path: str = "data/signal.parquet"):
     df = load_data()
 
     # TODO: Add your signal logic here
-    signal = (
+    signal =  (
         df
+        .with_columns(
+            pl.col('return', 'specific_risk').truediv(100)
+        )
+        .with_columns(
+            pl.col('return').log1p().alias('log_return')
+        )
         .sort('barrid', 'date')
         .with_columns(
-            pl.col('return')
-            .log1p()
-            .rolling_sum(window_size=230)
-            .shift(22)
-            .alias('signal')
-        ).filter(
-            pl.col('date') >= dt.date(1997, 1, 1) & pl.col('signal').is_not_null()
-        ).with_columns(
-            pl.col('specific_risk')
-            .fill_null(strategy='forward')
-            .over('barrid')
+            pl.col('log_return').rolling_sum(window_size=230).over('barrid').alias('signal')
         )
+        .with_columns(
+            pl.col('signal').shift(22).over('barrid')
+        )
+        .drop('log_return')
         .with_columns(
             pl.col('signal')
             .sub(pl.col('signal').mean())
@@ -71,9 +71,12 @@ def create_signal(output_path: str = "data/signal.parquet"):
         .with_columns(
             pl.lit(0.05).mul('score').mul('specific_risk').alias('alpha')
         )
+        .filter(
+            pl.col('alpha').is_not_null()
+        )
     )
     # TODO: Save to data/signal.parquet
-    pl.write_parquet(signal, output_path)
+    signal.write_parquet(output_path)
 
 if __name__ == "__main__":
     create_signal()
