@@ -7,7 +7,7 @@ requires-python = ">=3.13, <3.14"
 dependencies = [
     "numpy>=2.3.2",
     "polars>=1.32.3",
-    "sf-quant==0.1.21",
+    "sf-quant==0.1.23",
     "sf-backtester>=0.1.1",
     "marimo[lsp,mcp]>=0.19.7",
     "plotly>=6.5.2",
@@ -17,12 +17,19 @@ dependencies = [
     "tabulate>=0.9.0",
     "ruff>=0.15.1",
     "mypy>=1.19.1",
+    "altair>=6.0.0",
 ]
 
 [dependency-groups]
 dev = [
     "ruff>=0.15.1",
 ]
+
+[tool.uv.scripts]
+ew_dash = "marimo edit --port 2718 --no-token --mcp src/framework/ew_dash.py"
+opt_dash = "marimo edit --port 2718 --no-token --mcp src/framework/opt_dash.py"
+create_signal = "python src/signal/create_signal.py"
+backtest = "python src/framework/run_backtest.py"
 
 [tool.marimo.language_servers.pylsp]
 enabled = true               # Enable/disable the Python language server

@@ -104,6 +104,7 @@ def _(sfr, signal_df_filtered):
 @app.cell
 def _(signal_df_filtered):
     import matplotlib.pyplot as plt
+    plt.style.use('default')
     _signal_values = signal_df_filtered.select('signal').to_numpy().flatten()
     plt.figure(figsize=(10, 6))
     plt.hist(_signal_values, bins=50, color='steelblue', edgecolor='black', alpha=0.7)
