@@ -11,8 +11,7 @@ def _():
     import plotly.graph_objects as go
     import sf_quant.performance as sfp
     import sf_quant.research as sfr
-    import altair as alt
-    return alt, go, marimo, pl, sfp, sfr
+    return go, marimo, pl, sfp, sfr
 
 
 @app.cell
@@ -27,7 +26,7 @@ def _(marimo):
 
 @app.cell
 def _(marimo):
-    data_dir = marimo.ui.text(value="data", label="Weights directory:")
+    data_dir = marimo.ui.text(value="data/weights", label="Weights directory:")
     signal_file = marimo.ui.text(value="data/signal.parquet", label="Signal file:")
     marimo.hstack([data_dir, signal_file])
     return data_dir, signal_file
@@ -99,55 +98,7 @@ def _(pl, sfp, weights):
     portfolio_returns = (
         sfp.generate_returns_from_weights(weights).with_columns(pl.col('return').truediv(100))
     )
-    portfolio_returns
     return (portfolio_returns,)
-
-
-@app.cell
-def _(alt, portfolio_returns):
-    _chart = (
-        alt.Chart(portfolio_returns)
-        .mark_bar()
-        .encode(
-            x=alt.X("return", type="quantitative", bin=True, title="return"),
-            y=alt.Y("count()", type="quantitative", title="Number of records"),
-            tooltip=[
-                alt.Tooltip(
-                    "return",
-                    type="quantitative",
-                    bin=True,
-                    title="return",
-                    format=",.2f",
-                ),
-                alt.Tooltip(
-                    "count()",
-                    type="quantitative",
-                    format=",.0f",
-                    title="Number of records",
-                ),
-            ],
-        ).properties(width="container").configure_view(stroke=None)
-    )
-    _chart
-    return
-
-
-@app.cell
-def _():
-    return
-
-
-@app.cell
-def _(marimo, portfolio_returns):
-    _min_r = portfolio_returns["return"].min()
-    _max_r = portfolio_returns["return"].max()
-    _nan_count = portfolio_returns["return"].is_nan().sum()
-    _inf_count = portfolio_returns["return"].is_infinite().sum()
-    marimo.md(f"""
-    **Portfolio returns diagnostics:**
-    min={_min_r:.6f}, max={_max_r:.6f}, nan={_nan_count}, inf={_inf_count}
-    """)
-    return
 
 
 @app.cell
@@ -373,62 +324,6 @@ def _(go, marimo, turnover):
 @app.cell
 def _(marimo):
     marimo.md("""
-    ## Monthly Returns Heatmap
-    """)
-    return
-
-
-@app.cell
-def _(go, marimo, pl, portfolio_returns):
-    _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
-    _monthly = (
-        portfolio_returns
-        .with_columns([
-            pl.col("date").dt.year().alias("year"),
-            pl.col("date").dt.month().alias("month"),
-        ])
-        .group_by(["year", "month"])
-        .agg((pl.col("return").add(1).product().sub(1).mul(100)).alias("monthly_return"))
-        .sort("year", "month")
-    )
-
-    _heatmap = (
-        _monthly
-        .with_columns(pl.col("month").cast(pl.String))
-        .pivot(values="monthly_return", index="year", on="month", aggregate_function="first")
-        .sort("year")
-    )
-
-    _years = _heatmap.select("year").to_numpy().flatten().tolist()
-    _z = []
-    for _yr_row in _heatmap.iter_rows(named=True):
-        _z.append([_yr_row.get(str(m), None) for m in range(1, 13)])
-
-    _fig_hm = go.Figure(go.Heatmap(
-        z=_z,
-        x=_MONTHS,
-        y=[str(y) for y in _years],
-        colorscale=[[0.0, "#d73027"], [0.5, "#f7f7f7"], [1.0, "#1a9850"]],
-        zmid=0,
-        text=[[f"{v:.1f}%" if v is not None else "" for v in _row] for _row in _z],
-        texttemplate="%{text}",
-        hovertemplate="Month: %{x}<br>Year: %{y}<br>Return: %{z:.2f}%<extra></extra>",
-        showscale=True,
-    ))
-    _fig_hm.update_layout(
-        title="Monthly Returns Heatmap (%)",
-        height=max(300, 50 * len(_years) + 100),
-        template="plotly_white",
-    )
-    marimo.ui.plotly(_fig_hm)
-    return
-
-
-@app.cell
-def _(marimo):
-    marimo.md("""
     ## Information Coefficient (IC)
     """)
     return
@@ -494,8 +389,9 @@ def _(marimo):
 
 
 @app.cell
-def _(marimo, portfolio_returns, sfr):
+def _(marimo, pl, portfolio_returns, sfr):
     _ff = sfr.run_ff_regression(portfolio_returns)
+    _ff = _ff.with_columns(pl.col('coefficient').mul(252))
     marimo.md(f"""
     {_ff.to_pandas().to_markdown(index=False)}
     """)

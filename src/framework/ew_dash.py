@@ -147,8 +147,6 @@ def _(n_quantiles, sfr, signal_df_filtered):
         num_bins=n_quantiles.value,
         signal_col='alpha'
     ).drop_nulls()
-
-    quantile_df
     return (quantile_df,)
 
 
@@ -327,7 +325,7 @@ def _(marimo):
 
 @app.cell
 def _(quantile_df, sfr):
-    sfr.run_ff_regression(quantile_df)
+    sfr.run_quantile_ff_regression(quantile_df)
     return
 
 
