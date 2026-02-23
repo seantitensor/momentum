@@ -199,6 +199,8 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+logs/
+
 # PyPI configuration file
 .pypirc
 
@@ -216,3 +218,4 @@ __marimo__/
 
 # macOS
 .DS_Store
+
