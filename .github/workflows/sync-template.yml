@@ -21,9 +21,8 @@ jobs:
       - name: Sync Template Updates
         uses: AndreasAugustin/actions-template-sync@v2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          source_gh_token: ${{ secrets.GITHUB_TOKEN }}
           source_repo_path: BYUSilverFund/sf-research
           upstream_branch: main
           pr_title: "chore: update from template"
           pr_labels: "template-sync, automated"
-          delete_workflow_runs: true
