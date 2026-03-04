@@ -12,6 +12,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      workflows: write
     # Don't run this workflow in the template repo itself
     if: github.repository != 'BYUSilverFund/sf-research'
 
@@ -29,4 +30,4 @@ jobs:
           upstream_branch: main
           pr_title: "chore: update from template"
           pr_labels: "template-sync, automated"
-          template_sync_ignore_file_path: .templateignore
+          template_sync_ignore_file_path: .github/.templateignore
