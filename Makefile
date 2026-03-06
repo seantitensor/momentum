@@ -1,13 +1,13 @@
-.PHONY: ew-dash opt-dash create-signal backtest
+.PHONY: ew-dash opt-dash create-signal run-backtest
 
 ew-dash:
-	uv run marimo edit --port 2718 --no-token --mcp src/framework/ew_dash.py
+	uv run marimo run src/framework/ew_dash.py
 
 opt-dash:
-	uv run marimo edit --port 2718 --no-token --mcp  src/framework/opt_dash.py
+	uv run marimo run src/framework/opt_dash.py
 
 create-signal:
-	uv run python src/signal/signal.py
+	uv run python src/signal/create_signal.py
 
-backtest:
-	python src/framework/backtest.py
+run-backtest:
+	uv run python src/framework/run_backtest.py
