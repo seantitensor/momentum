@@ -12,7 +12,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      workflows: write
     # Don't run this workflow in the template repo itself
     if: github.repository != 'BYUSilverFund/sf-research'
 
